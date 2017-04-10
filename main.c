@@ -145,16 +145,7 @@ int process_file(char *path) {
     if (insiders == 1) {
       printf("\nIDENTIFICADO PROIBIDO\n");
     } else if (insiders > 1) {
-      int verticais = 0;
-      for (int i = 1; i < nblobs; i++) {
-        // se for quadrado vertical
-        if ((blobs[i].width / (float)blobs[i].height) < 0.75) {
-          verticais++;
-        }
-      }
-      if (verticais == 4) {
-        printf("\nIDENTIFICADO STOP\n");
-      }
+      printf("\nIDENTIFICADO STOP\n");
     } else {
       error("Sinal vermelho não reconhecido\n");
     }
