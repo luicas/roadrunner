@@ -105,7 +105,6 @@ void benchmark_compare_functions(int (*vc_fn1)(IVC *, IVC *), char *fn1_name, in
 // Testing utilities
 int vc_test_binary_function(char* filepath, imagetype_e type, int (*vc_fn)(IVC*, IVC*), char* fn_name);
 
-
 int vc_histogram_grayscale(IVC *src, long hist[]);
 
 // Filters
@@ -114,5 +113,7 @@ int vc_gray_lowpass_median_filter(IVC *src, IVC *dst);
 
 // Edge detection
 int vc_gray_edge_canny(IVC *src, IVC *dst);
+
+int vc_blob_inside_blob(OVC *b1, OVC *b2);
 
 #endif /* MYVC */

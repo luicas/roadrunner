@@ -1,4 +1,5 @@
 #include "myvc.h"
+#include "utils.h"
 #include <assert.h>
 #include <limits.h>
 #include <math.h>
@@ -419,7 +420,7 @@ int vc_test_gray_to_binary() {
 int vc_gray_to_binary_fixed(IVC *graysrc, IVC *graydst, int threshold) {
   if (!vc_is_grayscale(graysrc))
     return 0;
-  if (!vc_is_grayscale(graydst))
+  if (!vc_is_binary(graydst))
     return 0;
 
   if ((graysrc->width != graydst->width) ||
@@ -433,7 +434,7 @@ int vc_gray_to_binary_fixed(IVC *graysrc, IVC *graydst, int threshold) {
       pos = y * graysrc->bytesperline + x * graysrc->channels;
 
       if (graysrc->data[pos] > threshold) {
-        graydst->data[pos] = 255;
+        graydst->data[pos] = 1; // 255
       } else {
         graydst->data[pos] = 0;
       }
@@ -489,9 +490,9 @@ int vc_gray_to_binary_global_mean(IVC *graysrc, IVC *graydst) {
       pos = y * graysrc->bytesperline + x * graysrc->channels;
 
       if (graysrc->data[pos] > threshold) {
-        graydst->data[pos] = 255;
+        graydst->data[pos] = 0; // branco
       } else {
-        graydst->data[pos] = 0;
+        graydst->data[pos] = 1;
       }
     }
   }
@@ -992,18 +993,12 @@ int vc_binary_dilate(IVC *src, IVC *dst, int size) {
   for (x = 0; x < src->width; x++) {
     for (y = 0; y < src->height; y++) {
       pos = y * src->bytesperline + x * src->channels;
-#ifdef DEBUG
-      printf("pos: %ld\n", pos);
-#endif
       if (src->data[pos] == 0) {
         for (kx = -offset; kx <= offset; kx++) {
           for (ky = -offset; ky <= offset; ky++) {
             if ((y + ky >= 0) && (y + ky <= src->height) && (x + kx >= 0) &&
                 (x + kx <= src->width)) {
               pos_k = (y + ky) * src->bytesperline + (x + kx) * src->channels;
-#ifdef DEBUG
-              printf("src->data[%ld]: %d\n", pos_k, src->data[pos_k]);
-#endif
               dst->data[pos] |= src->data[pos_k];
             }
           }
@@ -1051,18 +1046,12 @@ int vc_binary_erode(IVC *src, IVC *dst, int size) {
   for (x = 0; x < src->width; x++) {
     for (y = 0; y < src->height; y++) {
       pos = y * src->bytesperline + x * src->channels;
-#ifdef DEBUG
-      printf("pos: %ld\n", pos);
-#endif
       if (src->data[pos] == 255) {
         for (kx = -offset; kx <= offset; kx++) {
           for (ky = -offset; ky <= offset; ky++) {
             if ((y + ky >= 0) && (y + ky <= src->height) && (x + kx >= 0) &&
                 (x + kx <= src->width)) {
               pos_k = (y + ky) * src->bytesperline + (x + kx) * src->channels;
-#ifdef DEBUG
-              printf("src->data[%ld]: %d\n", pos_k, src->data[pos_k]);
-#endif
               dst->data[pos] &= src->data[pos_k];
             }
           }
@@ -1473,21 +1462,26 @@ OVC *vc_binary_blob_labelling(IVC *src, IVC *dst, int *nlabels) {
   int x, y, a, b;
   long int i, size = bytesperline * height;
   long int posX, posA, posB, posC, posD;
-  int labeltable[1000];
-  memset(labeltable, 0, sizeof(labeltable));
+  int labeltable[256] = {0};
   int label = 1; // Etiqueta inicial.
   int num;
-  OVC *blobs = NULL; // Apontador para lista de blobs (objectos) que ser� retornada
-              // desta função.
+  // Apontador para lista de blobs (objectos) que será retornada desta função.
+  OVC *blobs = NULL;
 
   // Verificação de erros
-  if ((src->width <= 0) || (src->height <= 0) || (src->data == NULL))
-    return 0;
+  if ((src->width <= 0) || (src->height <= 0) || (src->data == NULL)) {
+    error("vc_binary_blob_labelling: first\n");
+    return NULL;
+  }
   if ((src->width != dst->width) || (src->height != dst->height) ||
-      (src->channels != dst->channels))
+      (src->channels != dst->channels)) {
+    error("vc_binary_blob_labelling: tamanhos e canais diferentes\n");
     return NULL;
-  if (channels != 1)
+  }
+  if (channels != 1) {
+    error("vc_binary_blob_labelling: src->channels != 1\n");
     return NULL;
+  }
 
   // Copia dados da imagem binária para imagem grayscale
   memcpy(datadst, datasrc, size);
@@ -1640,6 +1634,10 @@ OVC *vc_binary_blob_labelling(IVC *src, IVC *dst, int *nlabels) {
     return NULL;
   }
 
+#ifdef DEBUG
+  printf("nlabels=%d\n", *nlabels);
+#endif
+
   // Cria lista de blobs (objectos) e preenche a etiqueta
   blobs = (OVC *)calloc((*nlabels), sizeof(OVC));
   if (blobs != NULL) {
@@ -1728,7 +1726,7 @@ int vc_binary_blob_info(IVC *src, OVC *blobs, int nblobs) {
     blobs[i].yc = sumy / (blobs[i].area > 1 ? blobs[i].area : 1);
 
     // Circularidade
-    blobs[i].circularity = (12.5663706 * blobs[i].width * blobs[i].height) /
+    blobs[i].circularity = (12.5663706 * blobs[i].area) /
                            (blobs[i].perimeter * blobs[i].perimeter);
   }
 
@@ -1926,4 +1924,25 @@ int vc_gray_edge_canny(IVC *src, IVC *dst) {
     return 0;
 
   return 1;
+}
+
+// Verifica se o blob "b2" está contido dentro do blob "b1".
+// TODO: testar
+int vc_blob_inside_blob(OVC *b1, OVC *b2) {
+  int b1_left = b1->x;
+  int b1_right = b1->x + b1->width;
+  int b2_left = b2->x;
+  int b2_right = b2->x + b2->width;
+
+  int b1_top = b1->y;
+  int b1_bottom = b1->y + b1->height;
+  int b2_top = b2->y;
+  int b2_bottom = b2->y + b2->height;
+
+  // Intersecção:
+  // return (b1_left < b2_right && b1_right > b2_left &&
+  //        b1_top < b2_bottom && b1_bottom > b2_top);
+
+  return (b1_left < b2_left && b1_right > b2_right && b1_top < b2_top &&
+          b1_bottom > b2_bottom);
 }

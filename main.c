@@ -11,24 +11,30 @@
 
 #define MAXIMAGES 50
 
+// Função auxiliar para comparar dois blobs por area.
+int compare_area(const void *a, const void *b) {
+  return (((OVC *)b)->area - (((OVC *)a)->area));
+}
+
 int process_file(char *path) {
   IVC *src = vc_read_image(path);
   IVC *gray = vc_grayscale_new(src->width, src->height);
   IVC *edge = vc_grayscale_new(src->width, src->height);
-  IVC *dst = vc_rgb_new(src->width, src->height);
+  IVC *hsv = vc_rgb_new(src->width, src->height);
+  IVC *closed = vc_grayscale_new(src->width, src->height);
   const char *filename = get_filename_no_ext(basename(path));
 
   printf("A identificar `%s'\n", path);
 
-  Color color = vc_find_color(src, dst);
+  Color color = vc_find_color(src, hsv);
 #ifdef DEBUG
   printf("Cor: %s\n", vc_color_name(color));
-  if (!vc_write_image_info("out/color_segm.ppm", dst)) {
+  if (!vc_write_image_info("out/color_hsv.ppm", hsv)) {
     error("process_file: vc_write_image_info failed\n");
   }
 #endif
 
-  if (!vc_rgb_to_gray(dst, gray)) {
+  if (!vc_rgb_to_gray(hsv, gray)) {
     error("process_file: convertion to grayscale failed\n");
   }
 #ifdef DEBUG
@@ -37,33 +43,137 @@ int process_file(char *path) {
   }
 #endif
 
-  if (!vc_gray_edge_prewitt(gray, edge, 40)) {
-    error("process_file: sobel edge detection failed\n");
+  // dilate c/ kernel 5
+  if (!vc_binary_dilate(gray, closed, 5)) {
+    error("process_file: vc_binary_close failed\n");
   }
 #ifdef DEBUG
-  if (!vc_write_image_info("out/edge.pgm", edge)) {
+  if (!vc_write_image_info("out/closed.pgm", closed)) {
     error("process_file: vc_write_image_info failed\n");
   }
 #endif
 
-  Shape shape = vc_find_shape(edge, filename);
-#ifdef DEBUG
-  printf("Forma: %s\n", vc_shape_name(shape));
-#endif
+  // "bin" tem que ser uma imagem grayscale binária (0 e 1)
+  IVC *bin = vc_grayscale_new(gray->width, gray->height);
 
-  Sign sign = vc_identify_sign(color, shape);
-  if (strncmp(sign.name, "UnknownSign", 51) == 0) {
-    printf("\nSinal não reconhecido\n");
-  } else {
-    printf("\nSinal reconhecido:\n");
-    vc_sign_print(&sign);
+  // converter para imagem binária
+  if (!vc_gray_to_binary_global_mean(closed, bin)) {
+    error("process_file: vc_gray_to_binary_global_mean failed\n");
   }
 
+#ifdef DEBUG
+  if (!vc_write_image_info("out/binary.pbm", bin)) {
+    error("process_file: vc_write_image_info failed\n");
+  }
+#endif
+
+  if (color == Red) {
+    int area_menor = 800;
+    IVC *labeled = vc_grayscale_new(gray->width, gray->height);
+
+    int nblobs = 0; // número de blobs identificados, inicialmente a zero
+    OVC *blobs = vc_binary_blob_labelling(bin, labeled, &nblobs);
+    if (!blobs) {
+      fatal("vc_find_shape: vc_binary_blob_labelling failed\n");
+    }
+
+#ifdef DEBUG
+    printf("\nFiltering labels by area (> %d).\n", area_menor);
+    printf("Number of labels (before filtering): %d\n", nblobs);
+#endif
+
+    if (!vc_binary_blob_info(labeled, blobs, nblobs)) {
+      fatal("vc_find_shape: vc_binary_blob_info failed\n");
+    }
+
+    // apenas blobs com area superior a 800
+    nblobs = vc_binary_blob_filter(&blobs, nblobs, area_menor);
+    if (nblobs == -1) {
+      fatal("vc_find_shape: vc_binary_blob_filter failed\n");
+    }
+
+#ifdef DEBUG
+    printf("Number of labels (after filtering): %d\n\n", nblobs);
+#endif
+
+    for (int i = 0; i < nblobs; i++) {
+#ifdef DEBUG
+      vc_binary_blob_print(&blobs[i]);
+      // printf("blob %d is probably a ", blobs[i].label);
+      // printf("%s\n", vc_shape_name(vc_identify_shape(&blobs[i], 0.2f)));
+      printf("\n");
+#endif
+      vc_draw_mass_center(labeled, blobs[i].xc, blobs[i].yc, 255);
+      vc_draw_boundary_box(labeled, blobs[i].x, blobs[i].x + blobs[i].width,
+                           blobs[i].y, blobs[i].y + blobs[i].height, 255);
+    }
+
+#ifdef DEBUG
+    char *fname = concat(4, "out/", "blobbed_", filename, ".pgm");
+    vc_write_image_info(fname, labeled);
+    free(fname);
+#endif
+
+    /*
+        printf("Antes:\n");
+        for (int i = 0; i < nblobs; i++) {
+          printf("blob label=%d ", blobs[i].label);
+        }
+        printf("\n");
+    */
+    // ordena blobs por area descrescente
+    qsort(blobs, nblobs, sizeof(OVC), compare_area);
+    // vc_blobs_sort(&blobs, nblobs);
+    /*
+        printf("Depois:\n");
+        for (int i = 0; i < nblobs; i++) {
+          printf("blob label=%d ", blobs[i].label);
+        }
+        printf("\n");
+    */
+    OVC *largest = &blobs[0];
+    // printf("blob com maior área: %d\n", largest->area);
+    int insiders = 0;
+    for (int i = 1; i < nblobs; i++) {
+      if (vc_blob_inside_blob(largest, &blobs[i])) {
+        /* printf("blob com label %d está dentro da exterior (maior)\n",
+               blobs[i].label); */
+        insiders++;
+      }
+    }
+
+    if (insiders == 1) {
+      printf("\nIDENTIFICADO PROIBIDO\n");
+    } else if (insiders > 1) {
+      int verticais = 0;
+      for (int i = 1; i < nblobs; i++) {
+        // se for quadrado vertical
+        if ((blobs[i].width / (float)blobs[i].height) < 0.75) {
+          verticais++;
+        }
+      }
+      if (verticais == 4) {
+        printf("\nIDENTIFICADO STOP\n");
+      }
+    } else {
+      error("Sinal vermelho não reconhecido\n");
+    }
+
+    vc_image_free(labeled);
+    free(blobs);
+
+  } else if (color == Blue) {
+  } else {
+    error("Sinal não reconhecido: \n");
+  }
+
+  vc_image_free(bin);
   vc_image_free(src);
   vc_image_free(gray);
   vc_image_free(edge);
-  vc_image_free(dst);
-  free((char*)filename);
+  vc_image_free(hsv);
+  vc_image_free(closed);
+  free((char *)filename);
 
   return 1;
 }
@@ -95,7 +205,7 @@ int main(int argc, char *argv[]) {
   if (argc < 2) {
     fprintf(stderr, "Error: not enough arguments\n");
     usage(argv[0]);
-    return 0;
+    return 1;
   }
 
   // caminho do ficheiro ou pasta dado pelo utilizador
@@ -105,9 +215,9 @@ int main(int argc, char *argv[]) {
   if (is_regular_file(path)) {
     if (!process_file(path)) {
       fprintf(stderr, "main: process_file failed\n");
-      return 0;
+      return 1;
     }
-    return 1;
+    return 0;
   }
 
   // alocação de memória para MAXIMAGES com 100 caracteres cada
@@ -121,7 +231,7 @@ int main(int argc, char *argv[]) {
     if (nimages < 1) {
       fprintf(stderr, "main: get_images_from_dir found no images\n");
       free_images(images, MAXIMAGES);
-      return 0;
+      return 1;
     }
     for (size_t i = 0; i < nimages; i++) {
       if (!process_file(images[i])) {
@@ -134,5 +244,5 @@ int main(int argc, char *argv[]) {
   // libertar o espaço
   free_images(images, MAXIMAGES);
 
-  return 1;
+  return 0;
 }

@@ -37,7 +37,7 @@ Sign vc_identify_sign(Color color, Shape shape) {
 Color vc_find_color(IVC *src, IVC *dst) {
   Color color = UnknownColor;
   // Imagens temporárias
-  IVC *red = vc_rgb_new(src->width, src->height);
+  IVC *red = vc_rgb_new(src->width, src->height); // vc_graysclae_new
   IVC *blue = vc_rgb_new(src->width, src->height);
   IVC *yellow = vc_rgb_new(src->width, src->height);
   size_t size = src->bytesperline * src->height;
