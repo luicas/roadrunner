@@ -22,6 +22,8 @@ int process_file(char *path) {
   IVC *edge = vc_grayscale_new(src->width, src->height);
   IVC *hsv = vc_rgb_new(src->width, src->height);
   IVC *closed = vc_grayscale_new(src->width, src->height);
+  // "bin" tem que ser uma imagem grayscale binária (0 e 1)
+  IVC *bin = vc_grayscale_new(gray->width, gray->height);
   const char *filename = get_filename_no_ext(basename(path));
 
   printf("A identificar `%s'\n", path);
@@ -43,31 +45,28 @@ int process_file(char *path) {
   }
 #endif
 
-  // dilate c/ kernel 5
-  if (!vc_binary_dilate(gray, closed, 5)) {
-    error("process_file: vc_binary_close failed\n");
-  }
-#ifdef DEBUG
-  if (!vc_write_image_info("out/closed.pgm", closed)) {
-    error("process_file: vc_write_image_info failed\n");
-  }
-#endif
-
-  // "bin" tem que ser uma imagem grayscale binária (0 e 1)
-  IVC *bin = vc_grayscale_new(gray->width, gray->height);
-
-  // converter para imagem binária
-  if (!vc_gray_to_binary_global_mean(closed, bin)) {
-    error("process_file: vc_gray_to_binary_global_mean failed\n");
-  }
-
-#ifdef DEBUG
-  if (!vc_write_image_info("out/binary.pbm", bin)) {
-    error("process_file: vc_write_image_info failed\n");
-  }
-#endif
-
   if (color == Red) {
+    // dilate c/ kernel 5
+    if (!vc_binary_dilate(gray, closed, 5)) {
+      error("process_file: vc_binary_close failed\n");
+    }
+#ifdef DEBUG
+    if (!vc_write_image_info("out/closed.pgm", closed)) {
+      error("process_file: vc_write_image_info failed\n");
+    }
+#endif
+
+    // converter para imagem binária
+    if (!vc_gray_to_binary_global_mean(closed, bin)) {
+      error("process_file: vc_gray_to_global_mean failed\n");
+    }
+
+#ifdef DEBUG
+    if (!vc_write_image_info("out/binary.pbm", bin)) {
+      error("process_file: vc_write_image_info failed\n");
+    }
+#endif
+
     int area_menor = 800;
     IVC *labeled = vc_grayscale_new(gray->width, gray->height);
 
@@ -154,6 +153,65 @@ int process_file(char *path) {
     free(blobs);
 
   } else if (color == Blue) {
+    int area_menor = 400;
+    IVC *labeled = vc_grayscale_new(gray->width, gray->height);
+
+    // converter para imagem binária
+    if (!vc_gray_to_binary_global_mean(gray, bin)) {
+      error("process_file (blue): vc_gray_to_global_mean failed\n");
+    }
+
+#ifdef DEBUG
+    if (!vc_write_image_info("out/binary.pbm", bin)) {
+      error("process_file (blue): vc_write_image_info failed\n");
+    }
+#endif
+
+    int nblobs = 0; // número de blobs identificados, inicialmente a zero
+    OVC *blobs = vc_binary_blob_labelling(bin, labeled, &nblobs);
+    if (!blobs) {
+      fatal("process_file (blue): vc_binary_blob_labelling failed\n");
+    }
+
+#ifdef DEBUG
+    printf("\nFiltering labels by area (> %d).\n", area_menor);
+    printf("Number of labels (before filtering): %d\n", nblobs);
+#endif
+
+    if (!vc_binary_blob_info(labeled, blobs, nblobs)) {
+      fatal("process_file (blue): vc_binary_blob_info failed\n");
+    }
+
+    // apenas blobs com area superior a 800
+    nblobs = vc_binary_blob_filter(&blobs, nblobs, area_menor);
+    if (nblobs == -1) {
+      fatal("process_file (blue): vc_binary_blob_filter failed\n");
+    }
+
+#ifdef DEBUG
+    printf("Number of labels (after filtering): %d\n\n", nblobs);
+#endif
+
+    for (int i = 0; i < nblobs; i++) {
+#ifdef DEBUG
+      vc_binary_blob_print(&blobs[i]);
+      // printf("blob %d is probably a ", blobs[i].label);
+      // printf("%s\n", vc_shape_name(vc_identify_shape(&blobs[i], 0.2f)));
+      printf("\n");
+#endif
+      vc_draw_mass_center(labeled, blobs[i].xc, blobs[i].yc, 255);
+      vc_draw_boundary_box(labeled, blobs[i].x, blobs[i].x + blobs[i].width,
+                           blobs[i].y, blobs[i].y + blobs[i].height, 255);
+    }
+
+#ifdef DEBUG
+    char *fname = concat(4, "out/", "blobbed_", filename, ".pgm");
+    vc_write_image_info(fname, labeled);
+    free(fname);
+#endif
+
+    vc_image_free(labeled);
+    free(blobs);
   } else {
     error("Sinal não reconhecido: \n");
   }

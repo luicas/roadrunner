@@ -434,9 +434,9 @@ int vc_gray_to_binary_fixed(IVC *graysrc, IVC *graydst, int threshold) {
       pos = y * graysrc->bytesperline + x * graysrc->channels;
 
       if (graysrc->data[pos] > threshold) {
-        graydst->data[pos] = 1; // 255
+        graydst->data[pos] = 0; // 255
       } else {
-        graydst->data[pos] = 0;
+        graydst->data[pos] = 1;
       }
     }
   }
@@ -1945,4 +1945,9 @@ int vc_blob_inside_blob(OVC *b1, OVC *b2) {
 
   return (b1_left < b2_left && b1_right > b2_right && b1_top < b2_top &&
           b1_bottom > b2_bottom);
+}
+
+int vc_gray_fill_holes(IVC *src, OVC **blobs, size_t nblobs) {
+  // TODO: verificação 
+  return 1;
 }
