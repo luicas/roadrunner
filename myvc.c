@@ -1947,7 +1947,33 @@ int vc_blob_inside_blob(OVC *b1, OVC *b2) {
           b1_bottom > b2_bottom);
 }
 
-int vc_gray_fill_holes(IVC *src, OVC **blobs, size_t nblobs) {
-  // TODO: verificação 
-  return 1;
+IVC *vc_gray_fill_holes(IVC *src, OVC **blobs, size_t nblobs) {
+  // Verificação de erros
+  if ((src == NULL) || (src->width <= 0) || (src->height <= 0) ||
+      (src->data == NULL))
+    return NULL;
+  if (src->channels != 1)
+    return NULL;
+
+  int x, y;
+  long pos;
+  OVC *blob = NULL;
+  IVC *filled = vc_grayscale_new(src->width, src->height);
+  memcpy(filled->data, src->data,
+         sizeof(unsigned char) * src->bytesperline * src->height);
+
+  // para cada blob por todos os pixeis da sua area a branco na imagem src
+  for (size_t i = 0; i < nblobs; i++) {
+    blob = blobs[i];
+    if (blob != NULL) {
+      for (x = blob->x; x < blob->x + blob->width; x++) {
+        for (y = blob->y; y < blob->y + blob->height; y++) {
+          pos = (y * src->bytesperline) + (x * src->channels);
+          filled->data[pos] = 255; // branco
+        }
+      }
+    }
+  }
+
+  return filled;
 }

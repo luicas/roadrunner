@@ -113,23 +113,10 @@ int process_file(char *path) {
     free(fname);
 #endif
 
-    /*
-        printf("Antes:\n");
-        for (int i = 0; i < nblobs; i++) {
-          printf("blob label=%d ", blobs[i].label);
-        }
-        printf("\n");
-    */
     // ordena blobs por area descrescente
     qsort(blobs, nblobs, sizeof(OVC), compare_area);
     // vc_blobs_sort(&blobs, nblobs);
-    /*
-        printf("Depois:\n");
-        for (int i = 0; i < nblobs; i++) {
-          printf("blob label=%d ", blobs[i].label);
-        }
-        printf("\n");
-    */
+
     OVC *largest = &blobs[0];
     // printf("blob com maior área: %d\n", largest->area);
     int insiders = 0;
@@ -195,8 +182,6 @@ int process_file(char *path) {
     for (int i = 0; i < nblobs; i++) {
 #ifdef DEBUG
       vc_binary_blob_print(&blobs[i]);
-      // printf("blob %d is probably a ", blobs[i].label);
-      // printf("%s\n", vc_shape_name(vc_identify_shape(&blobs[i], 0.2f)));
       printf("\n");
 #endif
       vc_draw_mass_center(labeled, blobs[i].xc, blobs[i].yc, 255);
@@ -210,8 +195,55 @@ int process_file(char *path) {
     free(fname);
 #endif
 
-    vc_image_free(labeled);
+    qsort(blobs, nblobs, sizeof(OVC), compare_area);
+
+    OVC *largest = &blobs[0];
+    printf("\nblob com maior área: %d\n", largest->area);
+    OVC *insiders[nblobs];
+    for (int i = 1; i < nblobs; i++) {
+      if (vc_blob_inside_blob(largest, &blobs[i])) {
+        printf("blob com label %d está dentro da exterior (maior)\n",
+               blobs[i].label);
+        insiders[i] = &blobs[i];
+      } else {
+        insiders[i] = NULL;
+      }
+    }
+
+    for (int i = 0; i < nblobs; i++) {
+      // if (insiders[i] == 1) printf("insider label %d ", blobs[i].label);
+      if (insiders[i] != NULL)
+        printf("insiders[%d]=%d\n", i, insiders[i]->label);
+    }
+
+    // preencher os blobs interiores ao exterior a branco
+    IVC *filled = vc_gray_fill_holes(gray, insiders, nblobs);
+    if (!filled) {
+      fatal("process_file (blue): vc_gray_fill_holes failed\n");
+    }
+
+#ifdef DEBUG
+    char *fname2 = concat(4, "out/", "filled_", filename, ".pgm");
+    vc_write_image_info(fname2, filled);
+    free(fname2);
+#endif
+
+    IVC *bin2 = vc_grayscale_new(gray->width, gray->height);
+
+    if (!vc_gray_to_binary_global_mean(filled, bin2)) {
+      error("process_file (blue): vc_gray_to_global_mean failed\n");
+    }
+
+#ifdef DEBUG
+    if (!vc_write_image_info("out/binary_filled.pbm", bin2)) {
+      error("process_file (blue): vc_write_image_info failed\n");
+    }
+#endif
+
     free(blobs);
+    vc_image_free(labeled);
+    vc_image_free(filled);
+    vc_image_free(bin2);
   } else {
     error("Sinal não reconhecido: \n");
   }
