@@ -12,8 +12,12 @@
 #define MAXIMAGES 50
 
 // Função auxiliar para comparar dois blobs por area.
-int compare_area(const void *a, const void *b) {
+int compare_area_desc(const void *a, const void *b) {
   return (((OVC *)b)->area - (((OVC *)a)->area));
+}
+
+int compare_perimeter_asc(const void *a, const void *b) {
+  return (((OVC *)a)->perimeter - (((OVC *)b)->perimeter));
 }
 
 int process_file(char *path) {
@@ -113,9 +117,8 @@ int process_file(char *path) {
     free(fname);
 #endif
 
-    // ordena blobs por area descrescente
-    qsort(blobs, nblobs, sizeof(OVC), compare_area);
-    // vc_blobs_sort(&blobs, nblobs);
+    // ordena blobs por area descendente
+    qsort(blobs, nblobs, sizeof(OVC), compare_area_desc);
 
     OVC *largest = &blobs[0];
     // printf("blob com maior área: %d\n", largest->area);
@@ -196,24 +199,35 @@ int process_file(char *path) {
     free(fname);
 #endif
 
-    qsort(blobs, nblobs, sizeof(OVC), compare_area);
+    // ordena blobs por perimetro ascendente
+    qsort(blobs, nblobs, sizeof(OVC), compare_perimeter_asc);
+
+    for (int i = 0; i < nblobs; i++) printf("blob %d perimetro=%d\n", blobs[i].label, blobs[i].area);
 
     printf("DEBUG nblobs: %d\n", nblobs);
 
-    OVC *largest = &blobs[0];
-    printf("\nblob com maior área: %d\n", largest->area);
     OVC *insiders[nblobs];
-    for (int i = 1; i < nblobs; i++) {
-      if (vc_blob_inside_blob(largest, &blobs[i])) {
-        printf("blob com label %d está dentro da exterior (maior)\n",
-               blobs[i].label);
-        insiders[i] = &blobs[i];
-      } else {
-        insiders[i] = NULL;
+    int ninsiders = 0;
+    OVC *container = NULL;
+    for (int i = 1; i < nblobs; i++) { // para cada um dos blobs
+      if (container == NULL) { // se o blob exterior ainda não tiver sido encontrado
+        for (int j = 0; j < i; j++) { // para cada blob com uma area menor do que o atual
+      	 printf("i: %d j: %d\n", i, j);
+          // se o blob atual contiver o mais pequeno
+          if (vc_blob_inside_blob(&blobs[i], &blobs[j])) {
+            container = &blobs[i];
+            insiders[j] = &blobs[j];
+            ninsiders++;
+          } else {
+            insiders[j] = NULL;
+          }
+        }
       }
     }
 
-    for (int i = 0; i < nblobs; i++) {
+    printf("Container: label: %d\n", container->label);
+        
+    for (int i = 0; i < ninsiders; i++) {
       // if (insiders[i] == 1) printf("insider label %d ", blobs[i].label);
       if (insiders[i] != NULL)
         printf("insiders[%d]=%d\n", i, insiders[i]->label);
@@ -284,10 +298,15 @@ int process_file(char *path) {
       vc_draw_boundary_box(labeled2, blobs2[i].x, blobs2[i].x + blobs2[i].width,
                            blobs2[i].y, blobs2[i].y + blobs2[i].height, 0);
 
-      if (blobs2[i].circularity > 0.95) {
-        printf("Circulo\n");
+      if (container->circularity > 0.95) {
+        printf("Circulo com %d insiders\n", ninsiders);
       } else {
-        printf("Rectangulo\n");
+        printf("Rectangulo com %d insiders\n", ninsiders);
+        if (ninsiders == 5) {
+          printf("\nIDENTIFICADO Autoestrada\n");
+        } else if (ninsiders == 3) {
+          printf("\nIDENTIFICADO Via Reservada\n");
+        }
       }
     }
 
