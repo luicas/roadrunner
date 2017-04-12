@@ -142,6 +142,7 @@ int process_file(char *path) {
   } else if (color == Blue) {
     int area_menor = 400;
     IVC *labeled = vc_grayscale_new(gray->width, gray->height);
+    IVC *labeled2 = vc_grayscale_new(gray->width, gray->height);
 
     // converter para imagem binária
     if (!vc_gray_to_binary_global_mean(gray, bin)) {
@@ -197,6 +198,8 @@ int process_file(char *path) {
 
     qsort(blobs, nblobs, sizeof(OVC), compare_area);
 
+    printf("DEBUG nblobs: %d\n", nblobs);
+
     OVC *largest = &blobs[0];
     printf("\nblob com maior área: %d\n", largest->area);
     OVC *insiders[nblobs];
@@ -228,7 +231,15 @@ int process_file(char *path) {
     free(fname2);
 #endif
 
+    // vc_gray_negative(filled);
     IVC *bin2 = vc_grayscale_new(gray->width, gray->height);
+
+    vc_gray_negative(filled);
+#ifdef DEBUG
+    if (!vc_write_image_info("out/inverted_filled.pgm", filled)) {
+      error("process_file (blue): vc_write_image_info failed\n");
+    }
+#endif
 
     if (!vc_gray_to_binary_global_mean(filled, bin2)) {
       error("process_file (blue): vc_gray_to_global_mean failed\n");
@@ -240,8 +251,56 @@ int process_file(char *path) {
     }
 #endif
 
+    int nblobs2 = 0; // número de blobs identificados, inicialmente a zero
+    OVC *blobs2 = vc_binary_blob_labelling(bin2, labeled2, &nblobs2);
+    if (!blobs2) {
+      fatal("process_file (blue): vc_binary_blob_labelling failed\n");
+    }
+
+    /*
+        printf("Number of labels (before filtering) (>%d): %d\n", area_menor,
+       nblobs2);
+
+        nblobs2 = vc_binary_blob_filter(&blobs2, nblobs2, area_menor);
+        if (nblobs2 == -1) {
+          fatal("vc_find_shape: vc_binary_blob_filter failed\n");
+        }
+
+        printf("Number of labels (before filtering): %d\n", nblobs2);
+    */
+
+    if (!vc_binary_blob_info(labeled2, blobs2, nblobs2)) {
+      fatal("process_file (blue): vc_binary_blob_info failed\n");
+    }
+
+    printf("DEBUG nblobs2: %d\n", nblobs2);
+
+    for (int i = 0; i < nblobs2; i++) {
+#ifdef DEBUG
+      vc_binary_blob_print(&blobs2[i]);
+      printf("\n");
+#endif
+      vc_draw_mass_center(labeled2, blobs2[i].xc, blobs2[i].yc, 255);
+      vc_draw_boundary_box(labeled2, blobs2[i].x, blobs2[i].x + blobs2[i].width,
+                           blobs2[i].y, blobs2[i].y + blobs2[i].height, 0);
+
+      if (blobs2[i].circularity > 0.95) {
+        printf("Circulo\n");
+      } else {
+        printf("Rectangulo\n");
+      }
+    }
+
+#ifdef DEBUG
+    char *fname3 = concat(4, "out/", "result_", filename, ".pgm");
+    vc_write_image_info(fname3, labeled2);
+    free(fname3);
+#endif
+
     free(blobs);
+    free(blobs2);
     vc_image_free(labeled);
+    vc_image_free(labeled2);
     vc_image_free(filled);
     vc_image_free(bin2);
   } else {

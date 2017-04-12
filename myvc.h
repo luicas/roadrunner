@@ -117,4 +117,5 @@ int vc_gray_edge_canny(IVC *src, IVC *dst);
 int vc_blob_inside_blob(OVC *b1, OVC *b2);
 IVC *vc_gray_fill_holes(IVC *src, OVC **blobs, size_t nblobs);
 
+int vc_binary_invert(IVC *image);
 #endif /* MYVC */

@@ -7,6 +7,22 @@
 #include <string.h>
 #include <time.h>
 
+int vc_binary_invert(IVC *image) {
+  if (!vc_is_grayscale(image))
+    return 0;
+
+  long pos;
+
+  for (int x = 0; x < image->width; x++) {
+    for (int y = 0; y < image->height; y++) {
+      pos = y * image->bytesperline + x;
+      image->data[pos] = 1 - image->data[pos];
+    }
+  }
+
+  return 1;
+}
+
 int vc_gray_negative(IVC *image) {
   if (!vc_is_grayscale(image))
     return 0;
@@ -1394,6 +1410,7 @@ int vc_binary_blob_print(OVC *blob) {
   printf("perimeter: %d\n", blob->perimeter);
   printf("width: %d\theight: %d\n", blob->width, blob->height);
   printf("x: %d\ty: %d\n", blob->x, blob->y);
+  printf("circularity: %.2f\n", blob->circularity);
 
   return 1;
 }
@@ -1947,6 +1964,7 @@ int vc_blob_inside_blob(OVC *b1, OVC *b2) {
           b1_bottom > b2_bottom);
 }
 
+// TODO: preencher qualquer tipo de forma, e não apenas rectangulos
 IVC *vc_gray_fill_holes(IVC *src, OVC **blobs, size_t nblobs) {
   // Verificação de erros
   if ((src == NULL) || (src->width <= 0) || (src->height <= 0) ||
