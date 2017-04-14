@@ -21,22 +21,11 @@ int compare_perimeter_asc(const void *a, const void *b) {
 }
 
 int process_red(IVC *gray, char *filename) {
-  IVC *closed = vc_grayscale_new(gray->width, gray->height);
   // "bin" tem que ser uma imagem grayscale binária (0 e 1)
   IVC *bin = vc_grayscale_new(gray->width, gray->height);
 
-  // dilate c/ kernel 5
-  if (!vc_binary_dilate(gray, closed, 5)) {
-    error("process_red: vc_binary_close failed\n");
-  }
-#ifdef DEBUG
-  if (!vc_write_image_info("out/closed.pgm", closed)) {
-    error("process_red: vc_write_image_info failed\n");
-  }
-#endif
-
   // converter para imagem binária
-  if (!vc_gray_to_binary_global_mean(closed, bin)) {
+  if (!vc_gray_to_binary_global_mean(gray, bin)) {
     error("process_red: vc_gray_to_global_mean failed\n");
   }
 
@@ -115,9 +104,8 @@ int process_red(IVC *gray, char *filename) {
   }
 
   vc_image_free(labeled);
-  free(blobs);
   vc_image_free(bin);
-  vc_image_free(closed);
+  free(blobs);
 
   return 1;
 }
