@@ -51,7 +51,7 @@ int is_directory(const char *path) {
   return S_ISDIR(path_stat.st_mode);
 }
 
-const char *get_filename_no_ext(char *s) {
+char *get_filename_no_ext(char *s) {
   char *retstr;
   char *lastdot;
   if (s == NULL)
@@ -66,8 +66,8 @@ const char *get_filename_no_ext(char *s) {
   return retstr;
 }
 
-const char *get_filename_ext(const char *filename) {
-  const char *dot = strrchr(filename, '.');
+char *get_filename_ext(const char *filename) {
+  char *dot = strrchr(filename, '.');
   if (!dot || dot == filename)
     return NULL;
   return dot + 1;
