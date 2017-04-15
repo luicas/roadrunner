@@ -168,7 +168,9 @@ int process_blue(IVC *gray, char *filename) {
   // ordena blobs por perimetro ascendente
   qsort(blobs, nblobs, sizeof(OVC), compare_perimeter_asc);
 
+#ifdef DEBUG
   printf("DEBUG nblobs: %d\n", nblobs);
+#endif
 
   OVC *insiders[nblobs];
   int ninsiders = 0;
@@ -242,7 +244,9 @@ int process_blue(IVC *gray, char *filename) {
       printf("\nIDENTIFICADO Sentido Obrigatório (Frente)\n");
     }
   } else {
+#ifdef DEBUG
     printf("Rectangulo com %d insiders\n", ninsiders);
+#endif
     if (ninsiders == 5) {
       printf("\nIDENTIFICADO Autoestrada\n");
     } else {
