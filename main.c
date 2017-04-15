@@ -66,8 +66,6 @@ int process_red(IVC *gray, char *filename) {
   for (int i = 0; i < nblobs; i++) {
 #ifdef DEBUG
     vc_binary_blob_print(&blobs[i]);
-    // printf("blob %d is probably a ", blobs[i].label);
-    // printf("%s\n", vc_shape_name(vc_identify_shape(&blobs[i], 0.2f)));
     printf("\n");
 #endif
     vc_draw_mass_center(labeled, blobs[i].xc, blobs[i].yc, 255);
@@ -112,21 +110,20 @@ int process_red(IVC *gray, char *filename) {
 
 int process_blue(IVC *gray, char *filename) {
   int area_menor = 400;
-  IVC *bin = vc_grayscale_new(gray->width, gray->height);
-  IVC *labeled = vc_grayscale_new(gray->width, gray->height);
-  IVC *labeled2 = vc_grayscale_new(gray->width, gray->height);
+  IVC *bin      = vc_grayscale_new(gray->width, gray->height);
+  IVC *labeled  = vc_grayscale_new(gray->width, gray->height);
 
   // converter para imagem binária (0 e 1)
   if (!vc_gray_to_binary_global_mean(gray, bin)) {
     error("process_blue: vc_gray_to_global_mean failed\n");
   }
-  /*
+
   #ifdef DEBUG
-      if (!vc_write_image_info("out/binary.pbm", bin)) {
-        error("process_blue: vc_write_image_info failed\n");
-      }
+  if (!vc_write_image_info("out/binary.pbm", bin)) {
+    error("process_blue: vc_write_image_info failed\n");
+  }
   #endif
-  */
+
   int nblobs = 0; // número de blobs identificados, inicialmente a zero
   OVC *blobs = vc_binary_blob_labelling(bin, labeled, &nblobs);
   if (!blobs) {
@@ -142,7 +139,7 @@ int process_blue(IVC *gray, char *filename) {
     fatal("process_blue: vc_binary_blob_info failed\n");
   }
 
-  // apenas blobs com area superior a 800
+  // apenas blobs com area superior a 400
   nblobs = vc_binary_blob_filter(&blobs, nblobs, area_menor);
   if (nblobs == -1) {
     fatal("process_blue: vc_binary_blob_filter failed\n");
@@ -171,9 +168,6 @@ int process_blue(IVC *gray, char *filename) {
   // ordena blobs por perimetro ascendente
   qsort(blobs, nblobs, sizeof(OVC), compare_perimeter_asc);
 
-  for (int i = 0; i < nblobs; i++)
-    printf("blob %d perimetro=%d\n", blobs[i].label, blobs[i].area);
-
   printf("DEBUG nblobs: %d\n", nblobs);
 
   OVC *insiders[nblobs];
@@ -184,7 +178,6 @@ int process_blue(IVC *gray, char *filename) {
         NULL) { // se o blob exterior ainda não tiver sido encontrado
       for (int j = 0; j < i;
            j++) { // para cada blob com uma area menor do que o atual
-        printf("i: %d j: %d\n", i, j);
         // se o blob atual contiver o mais pequeno
         if (vc_blob_inside_blob(&blobs[i], &blobs[j])) {
           container = &blobs[i];
@@ -197,6 +190,7 @@ int process_blue(IVC *gray, char *filename) {
     }
   }
 
+/*
   printf("Container: label: %d\n", container->label);
 
   for (int i = 0; i < ninsiders; i++) {
@@ -204,6 +198,7 @@ int process_blue(IVC *gray, char *filename) {
     if (insiders[i] != NULL)
       printf("insiders[%d]=%d\n", i, insiders[i]->label);
   }
+*/
 
   // preencher os blobs interiores ao exterior a branco
   IVC *filled = vc_gray_fill_holes(gray, insiders, nblobs);
@@ -217,45 +212,12 @@ int process_blue(IVC *gray, char *filename) {
   free(fname2);
 #endif
 
-  // vc_gray_negative(filled);
-  IVC *bin2 = vc_grayscale_new(gray->width, gray->height);
-
   vc_gray_negative(filled);
 #ifdef DEBUG
   if (!vc_write_image_info("out/inverted_filled.pgm", filled)) {
     error("process_blue: vc_write_image_info failed\n");
   }
 #endif
-
-  if (!vc_gray_to_binary_global_mean(filled, bin2)) {
-    error("process_blue: vc_gray_to_global_mean failed\n");
-  }
-
-#ifdef DEBUG
-  if (!vc_write_image_info("out/binary_filled.pbm", bin2)) {
-    error("process_blue: vc_write_image_info failed\n");
-  }
-#endif
-
-  int nblobs2 = 0; // número de blobs identificados, inicialmente a zero
-  OVC *blobs2 = vc_binary_blob_labelling(bin2, labeled2, &nblobs2);
-  if (!blobs2) {
-    fatal("process_blue: vc_binary_blob_labelling failed\n");
-  }
-
-  if (!vc_binary_blob_info(labeled2, blobs2, nblobs2)) {
-    fatal("process_blue: vc_binary_blob_info failed\n");
-  }
-
-  printf("DEBUG nblobs2: %d\n", nblobs2);
-
-  for (int i = 0; i < nblobs2; i++) {
-#ifdef DEBUG
-    printf("FINAL: ");
-    vc_binary_blob_print(&blobs2[i]);
-    printf("\n");
-#endif
-  }
 
 #ifdef DEBUG
   printf("FINAL: container: %d circularity=%.2f\n", container->label,
@@ -288,19 +250,10 @@ int process_blue(IVC *gray, char *filename) {
     }
   }
 
-#ifdef DEBUG
-  char *fname3 = concat(4, "out/", "result_", filename, ".pgm");
-  vc_write_image_info(fname3, labeled2);
-  free(fname3);
-#endif
-
   free(blobs);
-  free(blobs2);
   vc_image_free(labeled);
-  vc_image_free(labeled2);
   vc_image_free(filled);
   vc_image_free(bin);
-  vc_image_free(bin2);
 
   return 1;
 }
